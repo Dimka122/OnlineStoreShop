@@ -1,0 +1,83 @@
+@model ECommerceShop.Models.ViewModels.HomeViewModel
+@using ECommerceShop.Models
+@{
+    Layout = null; // Standalone minimal view so it renders even if no shared layout exists
+}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Главная - ECommerceShop</title>
+</head>
+<body>
+    <h1>Добро пожаловать в ECommerceShop</h1>
+
+    <section>
+        <h2>Рекомендуемые товары</h2>
+        <ul>
+            @if (Model?.FeaturedProducts != null && Model.FeaturedProducts.Any())
+            {
+                foreach (var p in Model.FeaturedProducts)
+                {
+                    <li>@p.Name — @String.Format("{0:C}", p.Price)</li>
+                }
+            }
+            else
+            {
+                <li>Нет рекомендованных товаров.</li>
+            }
+        </ul>
+    </section>
+
+    <section>
+        <h2>Новые поступления</h2>
+        <ul>
+            @if (Model?.NewProducts != null && Model.NewProducts.Any())
+            {
+                foreach (var p in Model.NewProducts)
+                {
+                    <li>@p.Name — @String.Format("{0:C}", p.Price)</li>
+                }
+            }
+            else
+            {
+                <li>Нет новых товаров.</li>
+            }
+        </ul>
+    </section>
+
+    <section>
+        <h2>Распродажа</h2>
+        <ul>
+            @if (Model?.SaleProducts != null && Model.SaleProducts.Any())
+            {
+                foreach (var p in Model.SaleProducts)
+                {
+                    <li>@p.Name — @String.Format("{0:C}", p.SalePrice ?? p.Price)</li>
+                }
+            }
+            else
+            {
+                <li>Нет товаров на распродаже.</li>
+            }
+        </ul>
+    </section>
+
+    <section>
+        <h2>Категории</h2>
+        <ul>
+            @if (Model?.Categories != null && Model.Categories.Any())
+            {
+                foreach (var c in Model.Categories)
+                {
+                    <li>@c.Name</li>
+                }
+            }
+            else
+            {
+                <li>Категории отсутствуют.</li>
+            }
+        </ul>
+    </section>
+</body>
+</html>
