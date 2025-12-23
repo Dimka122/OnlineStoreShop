@@ -139,7 +139,7 @@ builder.Services.AddSwaggerGen(c =>
 // CORS configuration
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReactApp", builder =>
+    options.AddPolicy("online-store-frontend", builder =>
     {
         builder.WithOrigins("http://localhost:3000", "http://localhost:5173", "http://localhost:5174")
                .AllowAnyHeader()
@@ -179,7 +179,7 @@ app.UseStaticFiles();
 app.UseRouting();
 
 // CORS must be between UseRouting and UseAuthorization for endpoint routing
-app.UseCors("AllowReactApp");
+app.UseCors("online-store-frontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
