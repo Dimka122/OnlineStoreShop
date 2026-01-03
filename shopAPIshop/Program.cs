@@ -48,6 +48,28 @@ builder.Services.AddAuthentication(options =>
 {
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
+    // Allow tokens to be provided via Authorization header (default), query string (?access_token=...) or cookie named "access_token"
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // If token is provided in query string (useful for some clients)
+            var accessToken = context.Request.Query["access_token"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(accessToken))
+            {
+                context.Token = accessToken;
+                return Task.CompletedTask;
+            }
+
+            // If token is provided in a cookie named "access_token" (SPA may store tokens in cookies)
+            if (context.Request.Cookies.TryGetValue("access_token", out var cookieToken) && !string.IsNullOrEmpty(cookieToken))
+            {
+                context.Token = cookieToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -60,6 +82,9 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 });
+
+// Add authorization services (policy-based / role-based) - ensure registered
+builder.Services.AddAuthorization();
 
 // Register custom services
 builder.Services.AddScoped<IJwtService, JwtService>();
