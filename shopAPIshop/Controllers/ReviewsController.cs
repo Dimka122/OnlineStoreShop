@@ -16,15 +16,18 @@ namespace ECommerceShop.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<ReviewsController> _logger;
+        private readonly IConfiguration _configuration;
 
         public ReviewsController(
             ApplicationDbContext context,
             UserManager<ApplicationUser> userManager,
-            ILogger<ReviewsController> logger)
+            ILogger<ReviewsController> logger,
+            IConfiguration configuration)
         {
             _context = context;
             _userManager = userManager;
             _logger = logger;
+            _configuration = configuration;
         }
 
         [HttpGet("product/{productId}")]
@@ -175,14 +178,18 @@ namespace ECommerceShop.Controllers
                 if (existingReview != null)
                     return BadRequest(new { Message = "You have already reviewed this product" });
 
-                // Check if user has purchased this product
-                var hasPurchased = await _context.OrderItems
-                    .AnyAsync(oi => oi.Order.UserId == userId && 
-                                   oi.ProductId == productId && 
-                                   oi.Order.Status == OrderStatus.Delivered);
-                
-                if (!hasPurchased)
-                    return BadRequest(new { Message = "You can only review products you have purchased" });
+                // Optionally check if user has purchased this product (configurable)
+                var requirePurchase = _configuration.GetValue<bool?>("Reviews:RequirePurchase") ?? true;
+                if (requirePurchase)
+                {
+                    var hasPurchased = await _context.OrderItems
+                        .AnyAsync(oi => oi.Order.UserId == userId && 
+                                       oi.ProductId == productId && 
+                                       oi.Order.Status == OrderStatus.Delivered);
+
+                    if (!hasPurchased)
+                        return BadRequest(new { Message = "You can only review products you have purchased" });
+                }
 
                 var review = new ProductReview
                 {
@@ -196,18 +203,20 @@ namespace ECommerceShop.Controllers
 
                 _context.ProductReviews.Add(review);
                 await _context.SaveChangesAsync();
+var appUser = await _userManager.FindByIdAsync(userId);
+var userName = $"{appUser?.FirstName ?? ""} {appUser?.LastName ?? ""}";
 
-                var reviewDto = new ProductReviewDTO
-                {
-                    Id = review.Id,
-                    ProductId = review.ProductId,
-                    UserId = review.UserId,
-                    UserName = $"{review.User.FirstName} {review.User.LastName}",
-                    Rating = review.Rating,
-                    Comment = review.Comment,
-                    CreatedAt = review.CreatedAt,
-                    IsApproved = review.IsApproved
-                };
+var reviewDto = new ProductReviewDTO
+{
+    Id = review.Id,
+    ProductId = review.ProductId,
+    UserId = review.UserId,
+    UserName = userName,
+    Rating = review.Rating,
+    Comment = review.Comment,
+    CreatedAt = review.CreatedAt,
+    IsApproved = review.IsApproved
+};
 
                 return CreatedAtAction(nameof(GetProductReviews), new { productId = productId }, new
                 {

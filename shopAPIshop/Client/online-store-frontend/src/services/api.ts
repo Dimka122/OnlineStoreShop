@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Product, Category, CartItem, ShoppingCart, LoginRequest, RegisterRequest, AuthResponse, Order } from '../types';
 
 const API_BASE_URL = 'https://localhost:54131/api';
+const API_ORIGIN = API_BASE_URL.replace(/\/api$/i, '');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -26,12 +27,24 @@ export const productsApi = {
     if (search) params.search = search;
     
     const response = await api.get('/products', { params });
-    return response.data;
+    const raw = response.data;
+    const outer = raw?.data ?? raw?.Data ?? raw;
+
+    // Try to locate products array in common shapes
+    const productsArray = outer?.Products ?? outer?.products ?? outer?.data?.Products ?? outer?.data ?? outer;
+
+    const list = Array.isArray(productsArray) ? productsArray : [];
+
+    return list.map((p: any) => ({ ...p, imageUrl: toAbsoluteUrl(p.imageUrl ?? p.ImageUrl) }));
   },
   
   getProduct: async (id: number): Promise<Product> => {
     const response = await api.get(`/products/${id}`);
-    return response.data;
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    const data = payload?.Data ?? payload ?? response.data;
+    // ensure image url absolute
+    if (data?.ImageUrl) data.ImageUrl = toAbsoluteUrl(data.ImageUrl);
+    return data;
   },
   
   getFeaturedProducts: async (count = 4): Promise<Product[]> => {
@@ -39,15 +52,15 @@ export const productsApi = {
     const response = await api.get('/products', { params });
     // Normalize different response shapes
     const data = response.data;
-    if (Array.isArray(data)) return data as Product[];
-    if (Array.isArray(data?.products)) return data.products as Product[];
-    if (Array.isArray(data?.data)) return data.data as Product[];
-    return [];
+    const list = Array.isArray(data) ? data : data?.products ?? data?.data ?? [];
+    return (list || []).map((p: any) => ({ ...p, imageUrl: toAbsoluteUrl(p.imageUrl ?? p.ImageUrl) })) as Product[];
   },
   
   createReview: async (productId: number, review: { rating: number; comment: string }) => {
-    const response = await api.post(`/products/${productId}/reviews`, review);
-    return response.data;
+    // ReviewsController expects POST /api/reviews?productId={id}
+    const response = await api.post(`/reviews?productId=${productId}`, review);
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return payload?.Data ?? payload;
   }
   ,
   // Admin: create / update / delete products (requires auth)
@@ -68,68 +81,162 @@ export const productsApi = {
   ,
   // Create/Update with image via FormData
   createProductWithImage: async (formData: FormData) => {
-    const response = await api.post('/products', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data as Product;
+    // Ensure we don't send 'application/json' Content-Type from default headers
+    const config: any = { headers: { ...(api.defaults.headers.common || {}) } };
+    if (config.headers['Content-Type']) delete config.headers['Content-Type'];
+    const response = await api.post('/products', formData, config);
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return payload?.Data ?? payload;
   },
 
   updateProductWithImage: async (id: number, formData: FormData) => {
-    const response = await api.put(`/products/${id}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data as Product;
+    const config: any = { headers: { ...(api.defaults.headers.common || {}) } };
+    if (config.headers['Content-Type']) delete config.headers['Content-Type'];
+    const response = await api.put(`/products/${id}`, formData, config);
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return payload?.Data ?? payload;
   }
 };
 
 export const categoriesApi = {
   getCategories: async (): Promise<Category[]> => {
     const response = await api.get('/categories');
-    return response.data;
+    // backend may wrap response into { Message, Data } or { data }
+    return response.data?.data ?? response.data?.Data ?? response.data;
+  }
+  ,
+  createCategory: async (category: Partial<Category>) => {
+    const response = await api.post('/categories', category);
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return payload?.Data ?? payload;
+  },
+  updateCategory: async (id: number, category: Partial<Category>) => {
+    const response = await api.put(`/categories/${id}`, category);
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return payload?.Data ?? payload;
+  },
+  deleteCategory: async (id: number) => {
+    const response = await api.delete(`/categories/${id}`);
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return payload?.Data ?? payload;
   }
 };
 
 export const authApi = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     const response = await api.post('/auth/login', credentials);
-    return response.data;
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    // payload expected to be AuthResponseDTO { Token, Expiration, User }
+    const token = payload?.Token ?? payload?.token ?? null;
+    const userDto = payload?.User ?? payload?.user ?? payload;
+    const user = mapUserDtoToUser(userDto);
+    return { token, user } as AuthResponse;
   },
   
   register: async (userData: RegisterRequest): Promise<AuthResponse> => {
     const response = await api.post('/auth/register', userData);
-    return response.data;
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    const token = payload?.Token ?? payload?.token ?? null;
+    const userDto = payload?.User ?? payload?.user ?? payload;
+    const user = mapUserDtoToUser(userDto);
+    return { token, user } as AuthResponse;
   },
   
   getCurrentUser: async (): Promise<any> => {
     const response = await api.get('/auth/me');
-    return response.data;
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    // payload is user DTO
+    return mapUserDtoToUser(payload);
   }
 };
 
 export const cartApi = {
   getCart: async (): Promise<ShoppingCart> => {
     const response = await api.get('/shoppingcart');
-    return response.data;
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return mapShoppingCartDtoToShoppingCart(payload);
   },
   
-  addToCart: async (productId: number, quantity: number): Promise<CartItem> => {
+  addToCart: async (productId: number, quantity: number): Promise<ShoppingCart> => {
     const response = await api.post('/shoppingcart/add', { productId, quantity });
-    return response.data;
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return mapShoppingCartDtoToShoppingCart(payload);
   },
   
-  updateCartItem: async (itemId: number, quantity: number): Promise<CartItem> => {
+  updateCartItem: async (itemId: number, quantity: number): Promise<ShoppingCart> => {
     const response = await api.put(`/shoppingcart/items/${itemId}`, { quantity });
-    return response.data;
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    return mapShoppingCartDtoToShoppingCart(payload);
   },
   
-  removeFromCart: async (itemId: number): Promise<void> => {
-    await api.delete(`/shoppingcart/items/${itemId}`);
+  removeFromCart: async (itemId: number): Promise<ShoppingCart | void> => {
+    const response = await api.delete(`/shoppingcart/items/${itemId}`);
+    const payload = response.data?.data ?? response.data?.Data ?? response.data;
+    // some endpoints return updated cart
+    if (payload) return mapShoppingCartDtoToShoppingCart(payload);
+    return undefined;
   },
   
   clearCart: async (): Promise<void> => {
-    await api.delete('/shoppingcart');
+    // backend clear endpoint is DELETE /shoppingcart/clear
+    const response = await api.delete('/shoppingcart/clear');
+    return (response.data as any) ?? undefined;
   }
 };
+
+// Helpers to map backend DTOs to frontend types
+function mapUserDtoToUser(userDto: any): any {
+  if (!userDto) return null;
+  const roles: string[] = userDto?.Roles ?? userDto?.roles ?? [];
+  const isAdmin = Array.isArray(roles) && roles.map(r => r.toLowerCase()).includes('admin');
+  return {
+    id: userDto?.Id ?? userDto?.id,
+    email: userDto?.Email ?? userDto?.email,
+    firstName: userDto?.FirstName ?? userDto?.firstName ?? '',
+    lastName: userDto?.LastName ?? userDto?.lastName ?? '',
+    role: isAdmin ? 'admin' : 'user',
+  };
+}
+
+function mapShoppingCartDtoToShoppingCart(dto: any): ShoppingCart {
+  if (!dto) return { id: 0, items: [], totalAmount: 0 };
+  const items: CartItem[] = (dto.CartItems ?? dto.cartItems ?? dto.items ?? []).map((ci: any) => ({
+    id: ci.Id ?? ci.id,
+    product: {
+      id: ci.ProductId ?? ci.productId ?? 0,
+      name: ci.ProductName ?? ci.productName ?? '',
+      description: ci.ProductDescription ?? '',
+      price: ci.UnitPrice ?? ci.unitPrice ?? 0,
+      salePrice: ci.SalePrice ?? ci.salePrice ?? undefined,
+      stockQuantity: ci.AvailableStock ?? ci.availableStock ?? 0,
+      imageUrl: toAbsoluteUrl(ci.ProductImageUrl ?? ci.productImageUrl ?? ci.product?.imageUrl ?? undefined),
+      isActive: true,
+      isFeatured: false,
+      createdAt: (dto.CreatedAt ?? new Date()).toString(),
+      updatedAt: undefined,
+      category: { id: 0, name: ci.CategoryName ?? ci.categoryName ?? (ci.product?.category?.name ?? '') },
+      reviews: [],
+      averageRating: 0,
+    },
+    quantity: ci.Quantity ?? ci.quantity ?? 1,
+    price: (ci.CurrentPrice ?? ci.currentPrice ?? ci.UnitPrice ?? ci.unitPrice ?? 0)
+  } as CartItem));
+
+  return {
+    id: dto.Id ?? dto.id ?? 0,
+    items,
+    totalAmount: dto.Total ?? dto.total ?? items.reduce((s: number, it: CartItem) => s + (it.price * it.quantity), 0)
+  };
+}
+
+function toAbsoluteUrl(url: string | undefined | null): string | undefined {
+  if (!url) return undefined;
+  // If already absolute, return as is
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  // If starts with '/', prefix backend origin
+  if (url.startsWith('/')) return `${API_ORIGIN}${url}`;
+  return url;
+}
 
 export const ordersApi = {
   getOrders: async (): Promise<Order[]> => {

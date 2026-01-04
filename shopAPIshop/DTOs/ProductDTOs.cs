@@ -1,5 +1,6 @@
 using ECommerceShop.Models;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 namespace ECommerceShop.DTOs
 {
@@ -143,5 +144,16 @@ namespace ECommerceShop.DTOs
         public int TotalPages { get; set; }
         public bool HasPreviousPage { get; set; }
         public bool HasNextPage { get; set; }
+    }
+
+    // DTOs to support multipart/form-data with image upload
+    public class ProductCreateWithImageDTO : ProductCreateDTO
+    {
+        public IFormFile? Image { get; set; }
+    }
+
+    public class ProductUpdateWithImageDTO : ProductUpdateDTO
+    {
+        public IFormFile? Image { get; set; }
     }
 }

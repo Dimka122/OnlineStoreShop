@@ -3,6 +3,7 @@ using ECommerceShop.Data;
 using ECommerceShop.Models;
 using ECommerceShop.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,15 +18,18 @@ namespace ECommerceShop.Controllers
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<ProductsController> _logger;
+        private readonly IWebHostEnvironment? _env;
 
         public ProductsController(
             ApplicationDbContext context,
             UserManager<ApplicationUser> userManager,
-            ILogger<ProductsController> logger)
+            ILogger<ProductsController> logger,
+            IWebHostEnvironment? env = null)
         {
             _context = context;
             _userManager = userManager;
             _logger = logger;
+            _env = env;
         }
 
         [HttpGet]
@@ -127,6 +131,19 @@ namespace ECommerceShop.Controllers
                     })
                     .ToListAsync();
 
+                // Make image URLs absolute when possible
+                if (Request != null)
+                {
+                    var baseUrl = $"{Request.Scheme}://{Request.Host}";
+                    foreach (var p in products)
+                    {
+                        if (!string.IsNullOrEmpty(p.ImageUrl) && p.ImageUrl.StartsWith('/'))
+                            p.ImageUrl = baseUrl + p.ImageUrl;
+                        if (p.Category != null && !string.IsNullOrEmpty(p.Category.ImageUrl) && p.Category.ImageUrl.StartsWith('/'))
+                            p.Category.ImageUrl = baseUrl + p.Category.ImageUrl;
+                    }
+                }
+
                 var productList = new ProductListDTO
                 {
                     Products = products,
@@ -137,6 +154,8 @@ namespace ECommerceShop.Controllers
                     HasPreviousPage = page > 1,
                     HasNextPage = page < totalPages
                 };
+
+
 
                 return Ok(new
                 {
@@ -268,6 +287,18 @@ namespace ECommerceShop.Controllers
                     })
                     .ToListAsync();
 
+                if (Request != null)
+                {
+                    var baseUrl = $"{Request.Scheme}://{Request.Host}";
+                    foreach (var p in relatedProducts)
+                    {
+                        if (!string.IsNullOrEmpty(p.ImageUrl) && p.ImageUrl.StartsWith('/'))
+                            p.ImageUrl = baseUrl + p.ImageUrl;
+                        if (p.Category != null && !string.IsNullOrEmpty(p.Category.ImageUrl) && p.Category.ImageUrl.StartsWith('/'))
+                            p.Category.ImageUrl = baseUrl + p.Category.ImageUrl;
+                    }
+                }
+
                 return Ok(new
                 {
                     Message = "Related products retrieved successfully",
@@ -283,7 +314,8 @@ namespace ECommerceShop.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> CreateProduct([FromBody] ProductCreateDTO model)
+        [RequestSizeLimit(10_000_000)]
+        public async Task<IActionResult> CreateProduct([FromForm] ProductCreateWithImageDTO model)
         {
             try
             {
@@ -294,6 +326,23 @@ namespace ECommerceShop.Controllers
                 if (category == null)
                     return BadRequest(new { Message = "Category not found" });
 
+                // Save uploaded image (if any)
+                string? imageUrl = model.ImageUrl;
+                if (model.Image != null && model.Image.Length > 0)
+                {
+                    var webRoot = _env?.WebRootPath ?? "wwwroot";
+                    var imagesFolder = Path.Combine(webRoot, "images", "products");
+                    if (!Directory.Exists(imagesFolder)) Directory.CreateDirectory(imagesFolder);
+                    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(model.Image.FileName)}";
+                    var filePath = Path.Combine(imagesFolder, fileName);
+                    using (var stream = System.IO.File.Create(filePath))
+                    {
+                        await model.Image.CopyToAsync(stream);
+                    }
+                    imageUrl = $"/images/products/{fileName}";
+                    _logger.LogInformation("Saved product image to {FilePath}", filePath);
+                }
+
                 var product = new Product
                 {
                     Name = model.Name,
@@ -301,7 +350,7 @@ namespace ECommerceShop.Controllers
                     Price = model.Price,
                     SalePrice = model.SalePrice,
                     StockQuantity = model.StockQuantity,
-                    ImageUrl = model.ImageUrl,
+                    ImageUrl = imageUrl,
                     IsActive = model.IsActive,
                     IsFeatured = model.IsFeatured,
                     CategoryId = model.CategoryId,
@@ -328,7 +377,8 @@ namespace ECommerceShop.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProduct(int id, [FromBody] ProductUpdateDTO model)
+        [RequestSizeLimit(10_000_000)]
+        public async Task<IActionResult> UpdateProduct(int id, [FromForm] ProductUpdateWithImageDTO model)
         {
             try
             {
@@ -348,7 +398,25 @@ namespace ECommerceShop.Controllers
                 product.Price = model.Price;
                 product.SalePrice = model.SalePrice;
                 product.StockQuantity = model.StockQuantity;
-                product.ImageUrl = model.ImageUrl;
+                // Handle image upload
+                if (model.Image != null && model.Image.Length > 0)
+                {
+                    var webRoot = _env?.WebRootPath ?? "wwwroot";
+                    var imagesFolder = Path.Combine(webRoot, "images", "products");
+                    if (!Directory.Exists(imagesFolder)) Directory.CreateDirectory(imagesFolder);
+                    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(model.Image.FileName)}";
+                    var filePath = Path.Combine(imagesFolder, fileName);
+                    using (var stream = System.IO.File.Create(filePath))
+                    {
+                        await model.Image.CopyToAsync(stream);
+                    }
+                    product.ImageUrl = $"/images/products/{fileName}";
+                    _logger.LogInformation("Saved product image to {FilePath}", filePath);
+                }
+                else
+                {
+                    product.ImageUrl = model.ImageUrl;
+                }
                 product.IsActive = model.IsActive;
                 product.IsFeatured = model.IsFeatured;
                 product.CategoryId = model.CategoryId;

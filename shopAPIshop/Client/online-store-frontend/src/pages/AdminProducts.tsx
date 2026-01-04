@@ -13,10 +13,19 @@ const AdminProducts: React.FC = () => {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const data = await productsApi.getProducts(1, 100);
-      // handle different response shapes
-      const list = Array.isArray(data) ? data : data?.products || data?.data || [];
-      setProducts(list);
+      const dataRaw: any = await productsApi.getProducts(1, 100);
+      // Normalize different response shapes ({ Message, Data }, { data }, array, etc.)
+      const resolved = (() => {
+        if (Array.isArray(dataRaw)) return dataRaw;
+        const outer = dataRaw?.data ?? dataRaw?.Data ?? dataRaw;
+        if (Array.isArray(outer)) return outer;
+        if (Array.isArray(outer?.products)) return outer.products;
+        if (Array.isArray(outer?.items)) return outer.items;
+        if (Array.isArray(outer?.data)) return outer.data;
+        return [];
+      })();
+
+      setProducts(resolved);
     } catch (err) {
       console.error(err);
     } finally {

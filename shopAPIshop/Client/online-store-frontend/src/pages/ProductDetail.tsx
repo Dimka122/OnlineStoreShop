@@ -30,6 +30,7 @@ const ProductDetail: React.FC = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -95,6 +96,7 @@ const ProductDetail: React.FC = () => {
       setReviewRating(5);
     } catch (error) {
       console.error('Error submitting review:', error);
+      setReviewError('Не удалось отправить отзыв. Возможно, требуется покупка или вы не авторизованы.');
       // You could show an error message here
     } finally {
       setSubmittingReview(false);
@@ -259,6 +261,9 @@ const ProductDetail: React.FC = () => {
             >
               {submittingReview ? 'Отправка...' : 'Отправить отзыв'}
             </Button>
+            {reviewError && (
+              <Alert severity="error" sx={{ mt: 2 }}>{reviewError}</Alert>
+            )}
           </Box>
         )}
 

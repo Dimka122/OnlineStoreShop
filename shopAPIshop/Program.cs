@@ -14,6 +14,16 @@ using Microsoft.EntityFrameworkCore.SqlServer;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// During development allow leaving purchase requirement off for easier testing
+if (builder.Environment.IsDevelopment())
+{
+    // If not specified in configuration, disable purchase requirement so reviews can be submitted in dev
+    if (builder.Configuration.GetSection("Reviews").GetValue<bool?>("RequirePurchase") == null)
+    {
+        builder.Configuration["Reviews:RequirePurchase"] = "false";
+    }
+}
+
 // Add services to the container.
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
