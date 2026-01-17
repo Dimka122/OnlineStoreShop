@@ -326,4 +326,4 @@ dotnet test
 
 ## Лицензия
 
-MIT License
+Apashe-2.0 license
