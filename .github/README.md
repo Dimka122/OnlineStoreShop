@@ -18,6 +18,7 @@ ASP.NET Core Web API для e-commerce приложения с React фронт�
 - **ASP.NET Core Web API**
 - **Entity Framework Core** (Code-First подход)
 - **MySQL/MariaDB**
+- **MsSQL**
 - **Identity Framework** (аутентификация и авторизация)
 - **JWT Bearer** (токены аутентификации)
 - **Swagger/OpenAPI** (документация API)
@@ -29,6 +30,7 @@ ASP.NET Core Web API для e-commerce приложения с React фронт�
 
 - .NET 8.0 SDK
 - MySQL/MariaDB
+- MsSQL
 - Visual Studio 2022 или VS Code
 
 ### Настройка базы данных
