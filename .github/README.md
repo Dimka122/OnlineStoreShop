@@ -1,6 +1,6 @@
 # ECommerceShop API
 
-ASP.NET Core Web API для e-commerce приложения с React фронтендом.
+ASP.NET Core Web API для e-commerce приложения с React фронтендом (папка Client/online-store-frontend).
 
 ## Обзор
 
